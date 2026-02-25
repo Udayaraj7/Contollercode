@@ -1,0 +1,360 @@
+
+sap.ui.define([
+    "sap/ui/core/mvc/ControllerExtension",
+    "sap/ui/core/Element",
+    "sap/ui/model/json/JSONModel",
+    "sap/m/RadioButton",
+    "sap/m/HBox",
+    "sap/ui/model/Filter",
+    "sap/ui/model/FilterOperator"
+], function (
+    ControllerExtension,
+    Element,
+    JSONModel,
+    RadioButton,
+    HBox,
+    Filter,
+    FilterOperator
+) {
+    "use strict";
+
+    return ControllerExtension.extend("loanoffercreation.ext.controller.Contractobj", {
+
+        override: {
+            onInit: function () {
+                // Read from localStorage, default to "Msg" if empty
+                //const sSavedMode = localStorage.getItem("selectedContractMode") || "Msg";
+                const sSavedMode =  "Msg";
+
+                const oModeModel = new JSONModel({
+                    mode: sSavedMode
+                });
+                this.base.getView().setModel(oModeModel, "mode");
+
+                var oViewModel = new JSONModel({
+                    noItems: false
+                });
+                this.getView().setModel(oViewModel, "viewModel");
+            },
+
+            routing: {
+                onAfterBinding: function () {
+                    debugger;
+                    // const sTableId = "loanoffercreation::ContractObjectPage--fe::table::contractToPartner::LineItem::Partners-innerTable";
+                    // const oTable = Element.getElementById(sTableId);
+                    // const sMode = this.getView().getModel("mode").getProperty("/mode");
+                    // const aColumns = oTable.getColumns();
+                    // if (aColumns && aColumns.length > 0) {
+
+                    //     aColumns[0].setHeader(new sap.m.Label({ text: sMode }));
+                    // }
+
+                },
+                onAfterBinding: function () {
+                    debugger
+                }
+            },
+
+            onAfterRendering: function () {
+                debugger;
+
+                this._attachTableDelegate();
+
+
+            },
+
+            editFlow: {
+                onBeforeSave: function (mParameters) {
+                    debugger;
+                    console.log("before save")
+                },
+                onAfterSave: function (mParameters) {
+
+                }
+
+            }
+        },
+
+        _attachTableDelegate: function () {
+            debugger;
+            const sTableId = "loanoffercreation::ContractObjectPage--fe::table::contractToPartner::LineItem::Partners-innerTable";
+            const oTable = Element.getElementById(sTableId);
+
+            if (!oTable) {
+                setTimeout(this._attachTableDelegate.bind(this), 400);
+                return;
+            }
+
+            if (oTable._customDelegateAttached) return;
+            oTable._customDelegateAttached = true;
+
+
+
+            oTable.attachUpdateFinished(function () {
+                debugger;
+
+                const rows = oTable.getItems();
+
+                if (rows.length !== 0) {
+
+                const firstRow = rows[0];
+                const rowContext = firstRow.getBindingContext();
+
+                if (!rowContext) return;
+
+                const dunningValue = rowContext.getObject().dunningLetter;
+
+                if (dunningValue && dunningValue.includes("MSG")) {
+                    console.log("if" ,dunningValue)
+                    this.getView().getModel("mode").setProperty("/mode", "Msg");
+                } else if(dunningValue && dunningValue.includes("VFIT")){
+                    console.log("else" ,dunningValue)
+                    this.getView().getModel("mode").setProperty("/mode", "Valuefit");
+                    console.log(this.getView().getModel("mode").getProperty("/mode"));
+                }
+            }
+            else{
+                 this.getView().getModel("mode").setProperty("/mode", "Msg");
+            }
+                /////////////////////////////////////
+                // Re-apply the Header Text from localStorage/Model on every render
+                    const sMode = this.getView().getModel("mode").getProperty("/mode");
+                    const aCols = oTable.getColumns();
+                    if (aCols && aCols.length > 0) {
+                        // Use a check to prevent infinite loops (only set if different)
+                        const oHeader = aCols[0].getHeader();
+                        console.log(oHeader.getText(),"---------",sMode)
+                        if (!oHeader || (oHeader.getText && oHeader.getText() !== sMode)) {
+                            aCols[0].setHeader(new sap.m.Label({ text: sMode }));
+                        }
+                    }
+
+
+                /////////////////////////////////
+                this._applyDropdownFilter(oTable);
+
+                const oContext = this.getView().getBindingContext();
+                if (!oContext) return;
+
+                const bIsActive = oContext.getProperty("IsActiveEntity");
+
+                // ✅ Run only when ACTIVE entity
+                // if (!bIsActive) return;
+                //var bNoItems = oTable.getItems().length === 0;
+
+                let aItems = oTable.getItems();
+
+
+
+                // .some() returns true if at least one item matches the condition
+                let bAtLeastOneHasActive = aItems.some(function (oItem) {
+                    let oContext = oItem.getBindingContext();
+                    if (oContext) {
+                        // Returns true if this specific row exists in the DB
+                        return oContext.getProperty("HasActiveEntity") === true;
+                    }
+                    return false;
+                });
+
+                if (bAtLeastOneHasActive) {
+                    console.log("Final Result: One or more items are already saved in the DB.");
+                    this.getView()
+                        .getModel("viewModel")
+                        .setProperty("/noItems", false);
+                } else {
+                    console.log("Final Result: All items are brand new drafts (not in DB).");
+                    this.getView()
+                        .getModel("viewModel")
+                        .setProperty("/noItems", true);
+                }
+
+
+
+
+            }.bind(this));
+
+            oTable.addEventDelegate({
+                onAfterRendering: () => {
+
+                    
+
+                    this._setHeaderRadios(oTable);
+                    this._applyDropdownFilter(oTable);
+                }
+            });
+        },
+
+
+
+        /* ======================================================= */
+        /* FIXED HEADER LOGIC                                      */
+        /* ======================================================= */
+
+
+
+        // _setHeaderRadios: function (oTable) {
+        //     const sToolbarId =
+        //         "loanoffercreation::ContractObjectPage--fe::table::contractToPartner::LineItem::Partners-toolbar";
+
+        //     const oToolbar = sap.ui.core.Element.getElementById(sToolbarId);
+        //     if (!oToolbar) return;
+
+        //     // prevent duplicate
+        //     if (oToolbar._customRadiosAdded) return;
+        //     oToolbar._customRadiosAdded = true;
+
+        //     const oRadioBox = this._createDualRadioHeader(oTable);
+
+        //     const oAction = new sap.ui.mdc.actiontoolbar.ActionToolbarAction({
+        //         action: oRadioBox
+        //     });
+        //     oToolbar.insertAction(oAction, 1);
+        // },
+
+        _setHeaderRadios: function (oTable) {
+    const sToolbarId =
+        "loanoffercreation::ContractObjectPage--fe::table::contractToPartner::LineItem::Partners-toolbar";
+
+    const oToolbar = sap.ui.core.Element.getElementById(sToolbarId);
+    if (!oToolbar) return;
+
+    /* -------------------------------------------------- */
+    /* 1️⃣  Remove Existing Custom Radio (if any)        */
+    /* -------------------------------------------------- */
+
+    const aActions = oToolbar.getActions();
+
+    aActions.forEach((oAction) => {
+        const oControl = oAction.getAction && oAction.getAction();
+
+        if (oControl && oControl.data("isCustomRadio")) {
+            oToolbar.removeAction(oAction);
+            oAction.destroy();
+        }
+    });
+
+    /* -------------------------------------------------- */
+    /* 2️⃣  Create New Radio                             */
+    /* -------------------------------------------------- */
+
+    const oRadioBox = this._createDualRadioHeader(oTable);
+
+    // mark it so we can identify later
+    oRadioBox.data("isCustomRadio", true);
+
+    const oNewAction = new sap.ui.mdc.actiontoolbar.ActionToolbarAction({
+        action: oRadioBox
+    });
+
+    /* -------------------------------------------------- */
+    /* 3️⃣  Insert New One                               */
+    /* -------------------------------------------------- */
+
+    oToolbar.insertAction(oNewAction, 1);
+},
+
+
+        _createDualRadioHeader: function (oTable) {
+            const sCurrentMode = this.getView().getModel("mode").getProperty("/mode");
+
+            return new HBox({
+                visible: "{= !${IsActiveEntity} && ${viewModel>/noItems} }",
+                alignItems: "Center",
+                items: [
+                    new RadioButton({
+                        text: "Msg",
+                        groupName: "headerGroup",
+                        selected: sCurrentMode === "Msg",
+                        select: (oEvent) => {
+                            if (oEvent.getParameter("selected")) {
+                                this._onRadioChange("Msg", oTable);
+                            }
+                        }
+                    }),
+                    new RadioButton({
+                        text: "Valuefit",
+                        groupName: "headerGroup",
+                        selected: sCurrentMode === "Valuefit",
+                        select: (oEvent) => {
+                            if (oEvent.getParameter("selected")) {
+                                this._onRadioChange("Valuefit", oTable);
+                            }
+                        }
+                    })
+                ]
+            });
+        },
+
+
+        _onRadioChange: function (sMode, oTable) {
+            this.getView().getModel("mode").setProperty("/mode", sMode);
+
+            // Persist the choice
+            //localStorage.setItem("selectedContractMode", sMode);
+
+            oTable.getColumns()[0].setHeader(new sap.m.Label({ text: sMode }));
+            console.log("mode changed and saved");
+            this._applyDropdownFilter(oTable);
+        }
+        ,
+
+        /* ======================================================= */
+        /* FILTER LOGIC (SEARCHING INSIDE VBOX)                    */
+        /* ======================================================= */
+
+        _applyDropdownFilter: function (oTable) {
+            debugger;
+
+
+            const sMode = this.getView().getModel("mode").getProperty("/mode");
+            //   oTable.getColumns()[0].setHeader(new sap.m.Text({ text: sMode }));
+
+
+            const sPrefix = (sMode === "Msg") ? "MSG" : "VFIT";
+            const oFilter = new Filter("name", FilterOperator.StartsWith, sPrefix);
+
+            debugger;
+            oTable.getItems().forEach((oRow) => {
+                let oMCB = null;
+                debugger
+                // Loop through cells to find the MultiComboBox (even if inside VBox)
+                oRow.getCells().forEach(oCell => {
+                    debugger
+                    if (oCell.isA("sap.m.MultiComboBox")) {
+                        oMCB = oCell;
+                    } else if (oCell.isA("sap.m.VBox")) {
+                        oMCB = oCell.getItems().find(ctrl => ctrl.isA("sap.m.MultiComboBox"));
+                    }
+                    else if (oCell.isA("sap.fe.macros.table.SlotColumn")) {
+                        oMCB = oCell.getContent().getItems()[1];
+                    }
+                });
+                debugger
+
+                if (oMCB) {
+                    const oBinding = oMCB.getBinding("items");
+                    if (oBinding) {
+                        oBinding.filter([oFilter]);
+                    } else {
+                        // Fallback for lazy loading in V4
+                        oMCB.attachEventOnce("open", () => {
+                            oMCB.getBinding("items").filter([oFilter]);
+                        });
+                    }
+                }
+
+
+            });
+        },
+
+
+
+
+
+
+
+
+
+    });
+});
+
